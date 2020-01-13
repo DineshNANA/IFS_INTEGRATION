@@ -1,0 +1,94 @@
+public class CSendSiteShopOrdersXmlToCsv implements Transformer {
+
+   @Override
+   public void init() throws IfsException {
+   }
+
+   @Override
+   public String transform(String sIn) throws IfsException {
+     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+         
+        //API to obtain DOM Document instance
+        DocumentBuilder builder = null;
+        StringBuilder sb = new StringBuilder();
+        try
+        {
+            //Create DocumentBuilder with default configuration
+            builder = factory.newDocumentBuilder();
+             
+            //Parse the content to Document object
+            Document doc = builder.parse(new InputSource(new StringReader(sIn)));
+            doc.getDocumentElement().normalize();
+            
+            Element root = doc.getDocumentElement();
+            
+            NodeList nList = doc.getElementsByTagName("ORDERS");
+            for(int temp = 0; temp < nList.getLength(); temp++){
+               NodeList nLists = doc.getElementsByTagName("SITE_SHOP_ORDER");
+               for(int j = 0; j < nLists.getLength(); j++){
+                 Node node = nLists.item(j);
+                  if(node.getNodeType() == Node.ELEMENT_NODE){
+                     Element eElement = (Element)node;
+                      
+                      
+                     sb.append(eElement.getElementsByTagName("C00").item(0).getTextContent()).append("/");//orderno
+                     sb.append(eElement.getElementsByTagName("C01").item(0).getTextContent()).append("/");//release no
+                     sb.append(eElement.getElementsByTagName("C02").item(0).getTextContent());//sequence no
+                     sb.append(",");
+                     sb.append(eElement.getElementsByTagName("C03").item(0).getTextContent());//part no
+                     sb.append(",,");                                                         //Blank
+                     sb.append(eElement.getElementsByTagName("C04").item(0).getTextContent());//part description
+                     sb.append(",");
+                     sb.append(eElement.getElementsByTagName("C05").item(0).getTextContent());//part weight
+                     sb.append(",,"); 
+                     sb.append(eElement.getElementsByTagName("C06").item(0).getTextContent());//product color
+                     sb.append(",,,,,,");                                                       //5blanks
+                     sb.append(eElement.getElementsByTagName("C07").item(0).getTextContent());//tool id
+                     sb.append(",,,");                                                          //2blanks
+                     sb.append(eElement.getElementsByTagName("C08").item(0).getTextContent());//standard cycle time
+                     sb.append(",");
+                     sb.append(eElement.getElementsByTagName("C08").item(0).getTextContent());//standard cycle time duplicated
+                     sb.append(",");
+                     if(eElement.hasAttribute("N00")){
+                        sb.append(eElement.getElementsByTagName("N00").item(0).getTextContent());
+                        sb.append(",");
+                     }
+                     else{
+                        sb.append(",");
+                     }
+                     if(eElement.hasAttribute("N00")){
+                        sb.append(eElement.getElementsByTagName("N00").item(0).getTextContent());
+                        sb.append(",");
+                     }
+                     else{
+                        sb.append(",");
+                     }
+                     sb.append(",,");
+                     
+                     sb.append(eElement.getElementsByTagName("N01").item(0).getTextContent());
+                     sb.append(",,,,,,,,,");
+                     sb.append(eElement.getElementsByTagName("C09").item(0).getTextContent());
+                     sb.append(",");
+                     sb.append(eElement.getElementsByTagName("C10").item(0).getTextContent());
+                     
+                     sb.append(",,,,,,,,,,,");
+                     sb.append(eElement.getElementsByTagName("D00").item(0).getTextContent());
+                     sb.append(",");
+                     sb.append(eElement.getElementsByTagName("D01").item(0).getTextContent());
+                     sb.append(",,,,,,,,,,,,,,,,,,,,");
+                     sb.append("\n");
+                  }                         
+               }
+            }
+            
+             
+        } 
+        catch (Exception e) 
+        {
+            e.printStackTrace();
+        }
+        
+      return sb.toString();
+   
+   }
+}
