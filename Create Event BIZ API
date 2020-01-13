@@ -1,0 +1,127 @@
+
+PROCEDURE Export_Shop_Order_Data(
+   contract_ IN VARCHAR2
+   )
+IS
+   sites_ XMLType;
+   bizapi_ 			VARCHAR2(30) := 'SEND_SITE_SHOP_ORDER';
+   sender_        VARCHAR2(30) := 'CONNECT';
+   receiver_      VARCHAR2(30) := 'BARCO';
+   site_shop_orders_ Plsqlap_Record_API.type_record_;
+   site_shop_order_  Plsqlap_Record_API.type_record_;
+   
+--   CURSOR get_site_data(contract_ VARCHAR2) IS
+--   SELECT xmlelement("SITE_DETAILS",                
+--                     XMLAGG(
+--                        xmlelement("SITE_DETAIL",
+--                           xmlelement("COMPANY", a.company),
+--                           xmlelement("SITE", a.contract),
+--                           xmlelement("DELIVERY_ADDRESS", a.delivery_address))
+--                     )) xmldata
+--   FROM Site_TAB a
+--   WHERE a.company = contract_--;
+
+  CURSOR get_site_data(contract_ VARCHAR2) IS
+  SELECT 
+   a.company,
+   a.contract,
+   a.delivery_address
+   FROM Site_TAB a
+   WHERE a.company = contract_;
+   
+   
+   CURSOR get_data IS
+      SELECT so.order_no,
+             so.release_no,
+             so.sequence_no,
+             soo.operation_no,
+             so.part_no,
+             soo.revised_qty_due - soo.qty_scrapped - soo.qty_complete  qty_required,
+             soo.work_center_no                                         work_center_no,
+             soo.efficiency_factor,
+             substr(so.objstate,1,1)                                    so_state,
+             soo.op_start_date,
+             soo.op_finish_date
+      FROM shop_order_operation soo,
+           shop_ord so
+      WHERE so.contract             = contract_
+      AND   soo.order_no            = so.order_no
+      AND   soo.release_no          = so.release_no
+      AND   soo.sequence_no         = so.sequence_no
+      AND   (soo.revised_qty_due - soo.qty_scrapped - soo.qty_complete) > 0
+      AND   soo.operation_no        = '10'
+      AND   so.objstate             = 'Released'
+      ORDER BY so.order_no,
+               so.release_no,
+               so.sequence_no;
+   
+      CURSOR get_tool_id (order_no_       VARCHAR2,
+                       release_no_     VARCHAR2,
+                       sequence_no_    VARCHAR2,
+                       operation_no_   NUMBER) IS
+      SELECT tool_id
+      FROM  shop_order_oper_tool_tab
+      WHERE order_no       = order_no_
+      AND   release_no     = release_no_
+      AND   sequence_no    = sequence_no_
+      AND   operation_no   = operation_no_
+      ORDER BY tool_sequence ASC;
+      tool_id_          VARCHAR2(40);
+   
+BEGIN
+   site_shop_orders_ := Plsqlap_Record_API.New_Record('SITE_SHOP_ORDERS');
+   FOR shop_rec_ IN get_data LOOP
+      site_shop_order_ := Plsqlap_Record_API.New_Record('SITE_SHOP_ORDER');
+      --Plsqlap_Record_API.Set_Value(site_shop_order_,'C00',shop_rec_.company);         
+      --Plsqlap_Record_API.Set_Value(site_shop_order_,'C01',shop_rec_.contract);         
+		--Plsqlap_Record_API.Set_Value(site_shop_order_,'C02',shop_rec_.delivery_address);
+      
+     
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'C00',shop_rec_.order_no);         
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'C01',shop_rec_.release_no);         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C02',shop_rec_.sequence_no);         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C03',shop_rec_.part_no);         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C04',Inventory_Part_API.Get_Description(contract_, shop_rec_.part_no));         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C05',Inventory_Part_API.Get_Weight_Net(contract_, shop_rec_.part_no));         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C06',Inventory_Part_Char_API.Get_Attr_Value(contract_, shop_rec_.part_no, 'COL'));         
+		
+      tool_id_ := NULL;
+      OPEN  get_tool_id(shop_rec_.order_no, shop_rec_.release_no, shop_rec_.sequence_no, shop_rec_.operation_no);
+      FETCH get_tool_id INTO tool_id_;
+      CLOSE get_tool_id;
+      
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'C07',tool_id_);         
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'C08',Inventory_Part_Char_API.Get_Attr_Value(contract_, shop_rec_.part_no, 'ECT'));
+      IF (shop_rec_.efficiency_factor != 100) THEN         
+         Plsqlap_Record_API.Set_Value(site_shop_order_,'N00',shop_rec_.efficiency_factor);
+      END IF;
+		Plsqlap_Record_API.Set_Value(site_shop_order_,'N01',shop_rec_.qty_required);
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'C09',Inventory_Part_Char_API.Get_Attr_Value(contract_, shop_rec_.part_no, 'NOI'));
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'C10',Inventory_Part_Char_API.Get_Attr_Value(contract_, shop_rec_.part_no, 'MCT'));
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'D00',shop_rec_.op_start_date);
+      Plsqlap_Record_API.Set_Value(site_shop_order_,'D01',shop_rec_.op_finish_date);
+      Plsqlap_Record_API.Add_Aggregate(site_shop_orders_,'ORDERS',site_shop_order_);
+   END LOOP;
+   
+   PLSQLAP_Server_API.Post_Outbound_BizAPI(bizapi_name_  => bizapi_,
+												 message_body_ => site_shop_orders_,
+												 sender_       => sender_,
+												 receiver_     => receiver_,
+												 message_type_ => 'EVENT_BIZAPI');
+   
+   
+   --Plsqlap_Record_API.Debug(site_shop_orders_);
+   
+--   OPEN get_site_data(contract_);
+--   FETCH get_site_data INTO sites_;
+--   CLOSE get_site_data;
+   
+--   PLSQLAP_Server_API.Post_Outbound_BizAPI(bizapi_name_  => bizapi_,
+--												 xml_          => sites_.getClobVal(),
+--												 sender_       => sender_,
+--												 receiver_     => receiver_,
+--												 message_type_ => 'EVENT_BIZAPI');
+--                                     
+--   Site_API.Exist(contract_);
+   
+END Export_Shop_Order_Data;
