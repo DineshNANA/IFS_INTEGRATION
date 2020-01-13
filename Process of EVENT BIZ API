@@ -2,3 +2,5 @@ We invoke it from DATABASE Procedure
 Then we need to add routing rule
 Then we need routing address for routing rule.
 Optionally if we want to change the xml format we need to transformer.
+(Transformet need to add to Routing address)
+(we can create java transformer or XSL transformer)
